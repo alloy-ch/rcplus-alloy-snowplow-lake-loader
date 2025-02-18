@@ -49,6 +49,7 @@ class IcebergWriter(config: Config.Iceberg) extends Writer {
           CREATE TABLE IF NOT EXISTS $fqTable
           (${SparkSchema.ddlForCreate})
           USING ICEBERG
+          PARTITIONED BY (date(load_tstamp))
           TBLPROPERTIES($tableProps)
           $locationClause
         """)
