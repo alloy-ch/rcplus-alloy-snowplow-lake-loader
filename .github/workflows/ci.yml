@@ -22,6 +22,8 @@ jobs:
           cache-dependency-path: |
             build.sbt
             build.properties
+      - name: Install sbt
+        uses: sbt/setup-sbt@v1
       - name: Check Scala formatting
         run: sbt scalafmtCheckAll scalafmtSbtCheck
       - name: Run tests
@@ -44,6 +46,8 @@ jobs:
           cache-dependency-path: |
             build.sbt
             build.properties
+      - name: Install sbt
+        uses: sbt/setup-sbt@v1
       - name: Docker login
         uses: docker/login-action@v3
         with:
