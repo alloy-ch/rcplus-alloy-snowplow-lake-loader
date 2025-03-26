@@ -60,7 +60,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: "alloych/lake-loader"
+          images: "docker.rcplus.io/alloych/lake-loader"
           tags: |
             type=raw,value=latest,enable=${{ startsWith(github.event.ref, 'refs/tags/v') }}
             type=raw,value=${{ github.ref_name }}
