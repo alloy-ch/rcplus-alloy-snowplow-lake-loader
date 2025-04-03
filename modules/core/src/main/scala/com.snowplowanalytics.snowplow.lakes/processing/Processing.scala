@@ -33,11 +33,7 @@ import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor => BadRowProces
 import com.snowplowanalytics.snowplow.badrows.Payload.{RawPayload => BadRowRawPayload}
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.ListOfList
-<<<<<<< HEAD
-import com.snowplowanalytics.snowplow.lakes.{Environment, Metrics, RuntimeService}
-=======
 import com.snowplowanalytics.snowplow.lakes.{Environment, RuntimeService}
->>>>>>> 0.6.1
 import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
 import com.snowplowanalytics.snowplow.loaders.transform.{
@@ -146,22 +142,6 @@ object Processing {
         _ <- sinkTransformedBatch(env, windowState, rows, SparkSchema.forBatch(nonAtomicFields.fields, env.respectIgluNullability))
       } yield ()
     }.drain
-
-  private def sinkTransformedBatch[F[_]: Sync](
-    env: Environment[F],
-    ref: Ref[F, WindowState]
-  ): Pipe[F, Transformed, Nothing] =
-    _.evalMap { case Transformed(rows, schema) =>
-      NonEmptyList.fromList(rows) match {
-        case Some(nel) =>
-          for {
-            windowState <- ref.get
-            _ <- env.lakeWriter.localAppendRows(windowState.viewName, nel, schema)
-            _ <- Logger[F].debug(s"Finished processing batch of size ${rows.size}")
-          } yield ()
-        case None =>
-          Logger[F].debug(s"An in-memory batch yielded zero good events.  Nothing will be saved to local disk.")
-      }
 
   private def sinkTransformedBatch[F[_]: Sync](
     env: Environment[F],
