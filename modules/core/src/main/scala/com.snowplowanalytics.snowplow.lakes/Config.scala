@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -74,7 +74,8 @@ object Config {
     table: String,
     catalog: IcebergCatalog,
     location: URI,
-    icebergTableProperties: Map[String, String]
+    icebergTableProperties: Map[String, String],
+    icebergWriteOptions: Map[String, String]
   ) extends Target
 
   sealed trait IcebergCatalog
@@ -100,8 +101,7 @@ object Config {
   case class Spark(
     taskRetries: Int,
     conf: Map[String, String],
-    gcpUserAgent: GcpUserAgent,
-    writerParallelismFraction: BigDecimal
+    gcpUserAgent: GcpUserAgent
   )
 
   case class Metrics(
@@ -160,7 +160,7 @@ object Config {
 
     // TODO add specific lake-loader docs for license
     implicit val licenseDecoder =
-      AcceptedLicense.decoder(AcceptedLicense.DocumentationLink("https://docs.snowplow.io/limited-use-license-1.0/"))
+      AcceptedLicense.decoder(AcceptedLicense.DocumentationLink("https://docs.snowplow.io/limited-use-license-1.1/"))
 
     deriveConfiguredDecoder[Config[Source, Sink]]
   }

@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.glue.model.{
   AccessDeniedException => GlueAccessDeniedException,
   EntityNotFoundException => GlueEntityNotFoundException
 }
+import com.amazonaws.services.dynamodbv2.model.AmazonDynamoDBException
 
 import java.nio.file.AccessDeniedException
 import scala.util.matching.Regex
@@ -47,13 +48,13 @@ object AwsApp extends LoaderApp[KinesisSourceConfig, KinesisSinkConfig](BuildInf
       "S3 bucket does not exist or we do not have permissions to see it exists"
     case e: S3Exception if e.statusCode() === 403 =>
       // No permission to read from S3 bucket or to write to S3 bucket
-      "Missing permissions to perform this action on S3 bucket"
+      extractMissingS3Permission(e)
     case e: S3Exception if e.statusCode() === 301 =>
       // Misconfigured AWS region
       "S3 bucket is not in the expected region"
     case e: GlueAccessDeniedException =>
       // No permission to read from Glue catalog
-      Option(e.getMessage).getOrElse("Missing permissions to perform this action on Glue catalog")
+      extractMissingGluePermission(e)
     case _: GlueEntityNotFoundException =>
       // Glue database does not exist
       "Glue resource does not exist or no permission to see it exists"
@@ -71,6 +72,13 @@ object AwsApp extends LoaderApp[KinesisSourceConfig, KinesisSinkConfig](BuildInf
       stripCauseDetails(e)
     case _: CredentialInitializationException =>
       "Failed to initialize AWS access credentials"
+
+    // Exceptions raised by underlying AWS SDK v1.
+    // Note AWS v1 dependencies will be removed in the next release of Hadoop and Delta
+    case e: AmazonDynamoDBException if e.getErrorCode === "AccessDeniedException" =>
+      s"Missing permissions to operate on the DynamoDB table"
+    case e: AmazonDynamoDBException if e.getErrorCode === "ValidationException" =>
+      s"DynamoDB table does not have the expected structure"
 
     // Exceptions common to the table format - Delta/Iceberg/Hudi
     case TableFormatSetupError.check(t) =>
@@ -95,4 +103,35 @@ object AwsApp extends LoaderApp[KinesisSourceConfig, KinesisSinkConfig](BuildInf
       case None =>
         t.getMessage
     }
+
+  /**
+   * Extracts s3:ActionName from exception message if possible
+   *
+   * Example exception message is as below: User: arn:aws:sts::...loader is not authorized to
+   * perform: s3:PutObject on resource: "arn:aws:s3:::bucket-name/....json" because no
+   * identity-based policy allows the s3:PutObject action (Service: S3, Status Code: 403, Request
+   * ID: req-id, Extended Request ID: ext-req-id)
+   */
+  private def extractMissingS3Permission(s3Exception: S3Exception): String = {
+    val pattern = """.*is not authorized to perform: s3:(\w+).*""".r
+    s3Exception.getMessage match {
+      case pattern(action) =>
+        s"Missing s3:$action permission on the S3 bucket"
+      case _ =>
+        "Missing permission on the S3 bucket"
+    }
+  }
+
+  /**
+   * Extracts glue:ActionName from exception message if possible
+   */
+  private def extractMissingGluePermission(glueException: GlueAccessDeniedException): String = {
+    val pattern = """.*is not authorized to perform: glue:(\w+).*""".r
+    Option(glueException.getMessage) match {
+      case Some(pattern(action)) =>
+        s"Missing glue:$action permission on the Glue catalog"
+      case _ =>
+        "Missing permission on the Glue catalog"
+    }
+  }
 }

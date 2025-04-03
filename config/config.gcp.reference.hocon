@@ -1,7 +1,7 @@
 {
 
   # -- Accept the terms of the Snowplow Limited Use License Agreement
-  # -- See https://docs.snowplow.io/limited-use-license-1.0/
+  # -- See https://docs.snowplow.io/limited-use-license-1.1/
   "license": {
     "accept": ${?ACCEPT_LIMITED_USE_LICENSE}
   }
@@ -14,15 +14,22 @@
     # -- The number of threads is equal to this factor multiplied by the number of availble cpu cores
     "parallelPullFactor": 0.5
 
-    # -- How many bytes can be buffered by the loader app before blocking the pubsub client library
-    # -- from fetching more events.
-    # -- This is a balance between memory usage vs how efficiently the app can operate.  The default value works well.
-    "bufferMaxBytes": 10000000
+    # -- Pubsub ack deadlines are extended for this duration when needed.
+    # -- A sensible value is double the size of the "windowing" config parameter, but no higher than 10 minutes.
+    "durationPerAckExtension": "600 seconds"
 
-    # -- Sets min/max boundaries on the value by which an ack deadline is extended.
-    # -- The actual value used is guided by runtime statistics collected by the pubsub client library.
-    "minDurationPerAckExtension": "60 seconds"
-    "maxDurationPerAckExtension": "600 seconds"
+    # -- Controls when ack deadlines are re-extended, for a message that is close to exceeding its ack deadline.
+    # -- For example, if `durationPerAckExtension` is `600 seconds` and `minRemainingAckDeadline` is `0.1` then the Source
+    # -- will wait until there is `60 seconds` left of the remining deadline, before re-extending the message deadline.
+    "minRemainingAckDeadline": 0.1
+
+    # -- How many pubsub messages to pull from the server in a single request.
+    "maxMessagesPerPull": 1000
+
+    # -- Adds an artifical delay between consecutive requests to pubsub for more messages.
+    # -- Under some circumstances, this was found to slightly alleviate a problem in which pubsub might re-deliver
+    # -- the same messages multiple times.
+    "debounceRequests": "100 millis"
   }
 
   "output": {
@@ -109,6 +116,12 @@
 #     "icebergTableProperties": {
 #       "write.metadata.metrics.column.event_id": "count"
 #     }
+#
+#     # -- Any valid Iceberg write option
+#     # -- This can be blank in most setups because the loader already sets sensible defaults.
+#     "icebergWriteOptions": {
+#       "write-format": "parquet"
+#     }
 #   }
 
     "bad": {
@@ -153,11 +166,24 @@
       # -- E.g. to enable the spark ui for debugging:
       "spark.ui.enabled": true
     }
+  }
 
-    # -- Controls how many spark tasks run in parallel during writing the events to cloud storage.
-    # -- E.g. If there are 8 available processors, and cpuParallelismFraction = 0.5, then we have 4 spark tasks for writing.
-    # -- The default value is known to work well. Changing this setting might affect memory usage, file sizes, and/or latency.
-    "writerParallelismFraction": 0.5
+  # Retry configuration for lake operation failures
+  "retries": {
+
+    # -- Configures exponential backoff on errors related to how lake is set up for this loader.
+    # -- Examples include authentication errors and permissions errors.
+    # -- This class of errors are reported periodically to the monitoring webhook.
+    "setupErrors": {
+      "delay": "30 seconds"
+    }
+
+    # -- Configures exponential backoff errors that are likely to be transient.
+    # -- Examples include server errors and network errors
+    "transientErrors": {
+      "delay": "1 second"
+      "attempts": 5
+    }
   }
 
   # Retry configuration for lake operation failures

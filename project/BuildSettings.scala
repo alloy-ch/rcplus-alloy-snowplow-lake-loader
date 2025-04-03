@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -42,14 +42,14 @@ object BuildSettings {
       IO.copyFile(file("LICENSE.md"), license)
       Seq(license)
     }.taskValue,
-    licenses += ("Snowplow Limited Use License Agreement", url("https://docs.snowplow.io/limited-use-license-1.0")),
+    licenses += ("Snowplow Limited Use License Agreement", url("https://docs.snowplow.io/limited-use-license-1.1")),
     headerLicense := Some(
       HeaderLicense.Custom(
         """|Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
           |
           |This software is made available by Snowplow Analytics, Ltd.,
-          |under the terms of the Snowplow Limited Use License Agreement, Version 1.0
-          |located at https://docs.snowplow.io/limited-use-license-1.0
+          |under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+          |located at https://docs.snowplow.io/limited-use-license-1.1
           |BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
           |OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
           |""".stripMargin
@@ -67,7 +67,10 @@ object BuildSettings {
 
   lazy val awsSettings = appSettings ++ Seq(
     name := "lake-loader-aws",
-    buildInfoKeys += BuildInfoKey("cloud" -> "AWS")
+    buildInfoKeys += BuildInfoKey("cloud" -> "AWS"),
+
+    // TODO: Remove this after Hadoop 3.5.0 is released with full support for V2 SDK
+    dockerEnvVars += ("AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT" -> "true")
   )
 
   lazy val azureSettings = appSettings ++ Seq(

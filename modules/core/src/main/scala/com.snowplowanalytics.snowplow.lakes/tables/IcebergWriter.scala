@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -62,8 +62,7 @@ class IcebergWriter(config: Config.Iceberg) extends Writer {
       df.write
         .format("iceberg")
         .mode("append")
-        .option("merge-schema", true)
-        .option("check-ordering", false)
+        .options(config.icebergWriteOptions)
         .saveAsTable(fqTable)
     }
 
@@ -108,4 +107,16 @@ class IcebergWriter(config: Config.Iceberg) extends Writer {
       }
       .mkString(", ")
 
+  /**
+   * Iceberg tolerates async deletes; in other words when we delete a file, there is no strong
+   * requirement that the file must be deleted immediately. Iceberg uses unique file names and never
+   * re-writes a file that was previously deleted
+   */
+  override def toleratesAsyncDelete: Boolean = true
+
+  /**
+   * Iceberg writer requires the Dataframe to be sorted, because we set the iceberg write option
+   * `distribution-mode = none`
+   */
+  override def expectsSortedDataframe: Boolean = true
 }

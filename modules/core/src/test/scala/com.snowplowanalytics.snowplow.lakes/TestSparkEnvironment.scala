@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -60,7 +60,7 @@ object TestSparkEnvironment {
 
   private def testSourceAndAck(windows: List[List[TokenedEvents]]): SourceAndAck[IO] =
     new SourceAndAck[IO] {
-      def stream(config: EventProcessingConfig, processor: EventProcessor[IO]): Stream[IO, Nothing] =
+      def stream(config: EventProcessingConfig[IO], processor: EventProcessor[IO]): Stream[IO, Nothing] =
         Stream.emits(windows).flatMap { batches =>
           Stream
             .emits(batches)
@@ -70,6 +70,9 @@ object TestSparkEnvironment {
 
       def isHealthy(maxAllowedProcessingLatency: FiniteDuration): IO[SourceAndAck.HealthStatus] =
         IO.pure(SourceAndAck.Healthy)
+
+      def currentStreamLatency: IO[Option[FiniteDuration]] =
+        IO.pure(None)
     }
 
   private def testHttpClient: Client[IO] = Client[IO] { _ =>
@@ -89,6 +92,7 @@ object TestSparkEnvironment {
     def addCommitted(count: Int): IO[Unit]                      = IO.unit
     def setLatency(latency: FiniteDuration): IO[Unit]           = IO.unit
     def setProcessingLatency(latency: FiniteDuration): IO[Unit] = IO.unit
+    def setE2ELatency(latency: FiniteDuration): IO[Unit]        = IO.unit
     def report: Stream[IO, Nothing]                             = Stream.never[IO]
   }
 
