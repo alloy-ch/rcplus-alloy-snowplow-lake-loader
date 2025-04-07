@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -78,7 +78,7 @@ object Environment {
       windowing <- Resource.eval(EventProcessingConfig.TimedWindows.build(config.main.windowing, config.main.numEagerWindows))
       lakeWriter <- LakeWriter.build(config.main.spark, config.main.output.good)
       lakeWriterWrapped = LakeWriter.withHandledErrors(lakeWriter, appHealth, config.main.retries, destinationSetupErrorCheck)
-      metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics))
+      metrics <- Resource.eval(Metrics.build(config.main.monitoring.metrics, sourceAndAck))
       cpuParallelism = chooseCpuParallelism(config.main)
     } yield Environment(
       appInfo                 = appInfo,

@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -54,6 +54,7 @@ object MockEnvironment {
     case class AddedCommittedCountMetric(count: Int) extends Action
     case class SetLatencyMetric(latency: FiniteDuration) extends Action
     case class SetProcessingLatencyMetric(latency: FiniteDuration) extends Action
+    case class SetE2ELatencyMetric(latency: FiniteDuration) extends Action
 
     /* Health */
     case class BecameUnhealthy(service: RuntimeService) extends Action
@@ -118,7 +119,7 @@ object MockEnvironment {
 
   private def testSourceAndAck(windows: List[List[TokenedEvents]], state: Ref[IO, Vector[Action]]): SourceAndAck[IO] =
     new SourceAndAck[IO] {
-      def stream(config: EventProcessingConfig, processor: EventProcessor[IO]): Stream[IO, Nothing] =
+      def stream(config: EventProcessingConfig[IO], processor: EventProcessor[IO]): Stream[IO, Nothing] =
         Stream.eval(state.update(_ :+ SubscribedToStream)).drain ++
           Stream.emits(windows).flatMap { batches =>
             Stream
@@ -134,6 +135,9 @@ object MockEnvironment {
 
       def isHealthy(maxAllowedProcessingLatency: FiniteDuration): IO[SourceAndAck.HealthStatus] =
         IO.pure(SourceAndAck.Healthy)
+
+      def currentStreamLatency: IO[Option[FiniteDuration]] =
+        IO.pure(None)
     }
 
   private def testSink(ref: Ref[IO, Vector[Action]]): Sink[IO] = Sink[IO] { batch =>
@@ -159,6 +163,9 @@ object MockEnvironment {
 
     def setProcessingLatency(latency: FiniteDuration): IO[Unit] =
       ref.update(_ :+ SetProcessingLatencyMetric(latency))
+
+    def setE2ELatency(latency: FiniteDuration): IO[Unit] =
+      ref.update(_ :+ SetE2ELatencyMetric(latency))
 
     def report: Stream[IO, Nothing] = Stream.never[IO]
   }

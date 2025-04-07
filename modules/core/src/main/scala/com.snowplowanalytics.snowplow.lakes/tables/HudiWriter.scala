@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -85,4 +85,15 @@ class HudiWriter(config: Config.Hudi) extends Writer {
         .options(config.hudiWriteOptions)
         .save(config.location.toString)
     }
+
+  /**
+   * Hudi cannot tolerate async deletes. When Hudi deletes a file, the file MUST be deleted
+   * immediately.
+   *
+   * In particular, the `hoodie.properties` file gets deleted and re-created by Hudi, and those
+   * steps must happen in order.
+   */
+  override def toleratesAsyncDelete: Boolean = false
+
+  override def expectsSortedDataframe: Boolean = false
 }

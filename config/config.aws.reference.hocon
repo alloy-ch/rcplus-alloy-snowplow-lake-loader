@@ -1,7 +1,7 @@
 {
 
   # -- Accept the terms of the Snowplow Limited Use License Agreement
-  # -- See https://docs.snowplow.io/limited-use-license-1.0/
+  # -- See https://docs.snowplow.io/limited-use-license-1.1/
   "license": {
     "accept": ${?ACCEPT_LIMITED_USE_LICENSE}
   }
@@ -39,6 +39,17 @@
 
     # -- Duration of shard leases. KCL workers must periodically refresh leases in the dynamodb table before this duration expires.
     "leaseDuration": "10 seconds"
+
+    # -- Controls how to pick the max number of leases to steal at one time.
+    # -- E.g. If there are 4 available processors, and maxLeasesToStealAtOneTimeFactor = 2.0, then allow the KCL to steal up to 8 leases.
+    # -- Allows bigger instances to more quickly acquire the shard-leases they need to combat latency
+    "maxLeasesToStealAtOneTimeFactor": 2.0
+
+    # -- Configures how to backoff and retry in case of DynamoDB provisioned throughput limits
+    "checkpointThrottledBackoffPolicy": {
+      "minBackoff": "100 millis"
+      "maxBackoff": "1 second"
+    }
   }
 
   "output": {
@@ -116,6 +127,12 @@
 #     "icebergTableProperties": {
 #       "write.metadata.metrics.column.event_id": "count"
 #     }
+#
+#     # -- Any valid Iceberg write option
+#     # -- This can be blank in most setups because the loader already sets sensible defaults.
+#     "icebergWriteOptions": {
+#       "write-format": "parquet"
+#     }
 #   }
 
     "bad": {
@@ -170,11 +187,24 @@
       # -- E.g. to change credentials provider
       "fs.s3a.aws.credentials.provider": "com.amazonaws.auth.InstanceProfileCredentialsProvider"
     }
+  }
 
-    # -- Controls how many spark tasks run in parallel during writing the events to cloud storage.
-    # -- E.g. If there are 8 available processors, and cpuParallelismFraction = 0.5, then we have 4 spark tasks for writing.
-    # -- The default value is known to work well. Changing this setting might affect memory usage, file sizes, and/or latency.
-    "writerParallelismFraction": 0.5
+  # Retry configuration for lake operation failures
+  "retries": {
+
+    # -- Configures exponential backoff on errors related to how lake is set up for this loader.
+    # -- Examples include authentication errors and permissions errors.
+    # -- This class of errors are reported periodically to the monitoring webhook.
+    "setupErrors": {
+      "delay": "30 seconds"
+    }
+
+    # -- Configures exponential backoff errors that are likely to be transient.
+    # -- Examples include server errors and network errors
+    "transientErrors": {
+      "delay": "1 second"
+      "attempts": 5
+    }
   }
 
   # Retry configuration for lake operation failures

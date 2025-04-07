@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -44,7 +44,16 @@ import java.util.concurrent.TimeUnit
 class AssumedRoleCredentialsProvider(delegate: AwsCredentialsProvider) extends AwsCredentialsProvider {
 
   /**
-   * Standard constructor invoked by hadoop
+   * Standard constructor invoked by Delta for the LogStore (e.g. DynamoDB)
+   *
+   * @param conf
+   *   The hadoop configuration, provided via spark configuration
+   */
+  def this(conf: Configuration) =
+    this(AssumedRoleCredentialsProvider.getDelegate(conf))
+
+  /**
+   * Standard constructor invoked by hadoop for the filesystem
    *
    * @param fsUri
    *   Base URI of this filesystem (not used by us)
@@ -52,7 +61,7 @@ class AssumedRoleCredentialsProvider(delegate: AwsCredentialsProvider) extends A
    *   The hadoop configuration, provided via spark configuration
    */
   def this(fsUri: URI, conf: Configuration) =
-    this(AssumedRoleCredentialsProvider.getDelegate(conf))
+    this(conf)
 
   override def resolveCredentials(): AwsCredentials =
     delegate.resolveCredentials()

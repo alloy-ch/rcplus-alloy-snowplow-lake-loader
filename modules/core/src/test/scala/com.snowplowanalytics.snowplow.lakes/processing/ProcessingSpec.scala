@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -11,14 +11,10 @@
 package com.snowplowanalytics.snowplow.lakes.processing
 
 import cats.implicits._
-import cats.effect.IO
 import org.specs2.Specification
 import cats.effect.testing.specs2.CatsEffect
 import io.circe.Json
 import cats.effect.testkit.TestControl
-
-import java.time.Instant
-import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.iglu.core.{SchemaKey, SchemaVer, SelfDescribingData}
 import com.snowplowanalytics.snowplow.analytics.scalasdk.SnowplowEvent
@@ -34,10 +30,9 @@ class ProcessingSpec extends Specification with CatsEffect {
     Write multiple windows of events in order $e3
     Write multiple batches in a single window when batch exceeds cutoff $e4
     Write good batches and bad events when a window contains both $e5
-    Set the latency metric based off the message timestamp $e6
-    Load events with a known schema $e7
-    Send failed events for an unrecognized schema $e8
-    Crash and exit for an unrecognized schema, if exitOnMissingIgluSchema is true $e9
+    Load events with a known schema $e6
+    Send failed events for an unrecognized schema $e7
+    Crash and exit for an unrecognized schema, if exitOnMissingIgluSchema is true $e8
   """
 
   def e1 = {
@@ -58,6 +53,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000000"),
         Action.AddedCommittedCountMetric(4),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
+        Action.SetE2ELatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(tokened.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000000")
       )
@@ -117,6 +113,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000000"),
         Action.AddedCommittedCountMetric(2),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
+        Action.SetE2ELatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(window1.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000000"),
 
@@ -129,6 +126,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000052"),
         Action.AddedCommittedCountMetric(6),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration),
+        Action.SetE2ELatencyMetric(2 * MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(window2.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000052"),
 
@@ -140,6 +138,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000134"),
         Action.AddedCommittedCountMetric(4),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration),
+        Action.SetE2ELatencyMetric(3 * MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(window3.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000134")
       )
@@ -170,6 +169,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000000"),
         Action.AddedCommittedCountMetric(6),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
+        Action.SetE2ELatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(tokened.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000000")
       )
@@ -212,6 +212,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000000"),
         Action.AddedCommittedCountMetric(8),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
+        Action.SetE2ELatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed((bads1 ::: goods1 ::: bads2 ::: goods2).map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000000")
       )
@@ -221,42 +222,6 @@ class ProcessingSpec extends Specification with CatsEffect {
   }
 
   def e6 = {
-    val messageTime = Instant.parse("2023-10-24T10:00:00.000Z")
-    val processTime = Instant.parse("2023-10-24T10:00:42.123Z").minusMillis(MockEnvironment.TimeTakenToCreateTable.toMillis)
-
-    val io = for {
-      inputs <- EventUtils.inputEvents(2, EventUtils.good())
-      tokened <- inputs.traverse(_.tokened).map {
-                   _.map {
-                     _.copy(earliestSourceTstamp = Some(messageTime))
-                   }
-                 }
-      control <- MockEnvironment.build(List(tokened))
-      _ <- IO.sleep(processTime.toEpochMilli.millis)
-      _ <- Processing.stream(control.environment).compile.drain
-      state <- control.state.get
-    } yield state should beEqualTo(
-      Vector(
-        Action.SubscribedToStream,
-        Action.CreatedTable,
-        Action.InitializedLocalDataFrame("v20231024100032"),
-        Action.SetLatencyMetric(42123.millis),
-        Action.AddedReceivedCountMetric(2),
-        Action.SetLatencyMetric(42123.millis),
-        Action.AddedReceivedCountMetric(2),
-        Action.AppendedRowsToDataFrame("v20231024100032", 4),
-        Action.CommittedToTheLake("v20231024100032"),
-        Action.AddedCommittedCountMetric(4),
-        Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
-        Action.Checkpointed(tokened.map(_.ack)),
-        Action.RemovedDataFrameFromDisk("v20231024100032")
-      )
-    )
-
-    TestControl.executeEmbed(io)
-  }
-
-  def e7 = {
 
     val ueGood700 = SnowplowEvent.UnstructEvent(
       Some(
@@ -285,6 +250,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000000"),
         Action.AddedCommittedCountMetric(2),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
+        Action.SetE2ELatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(tokened.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000000")
       )
@@ -293,7 +259,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     TestControl.executeEmbed(io)
   }
 
-  def e8 = {
+  def e7 = {
 
     val ueDoesNotExist = SnowplowEvent.UnstructEvent(
       Some(
@@ -324,6 +290,7 @@ class ProcessingSpec extends Specification with CatsEffect {
         Action.CommittedToTheLake("v19700101000000"),
         Action.AddedCommittedCountMetric(1),
         Action.SetProcessingLatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
+        Action.SetE2ELatencyMetric(MockEnvironment.WindowDuration + MockEnvironment.TimeTakenToCreateTable),
         Action.Checkpointed(tokened.map(_.ack)),
         Action.RemovedDataFrameFromDisk("v19700101000000")
       )
@@ -332,7 +299,7 @@ class ProcessingSpec extends Specification with CatsEffect {
     TestControl.executeEmbed(io)
   }
 
-  def e9 = {
+  def e8 = {
 
     val ueDoesNotExist = SnowplowEvent.UnstructEvent(
       Some(

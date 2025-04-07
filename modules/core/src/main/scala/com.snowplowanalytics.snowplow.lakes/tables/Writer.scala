@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -29,4 +29,17 @@ trait Writer {
 
   /** Write Snowplow events into the table */
   def write[F[_]: Sync](df: DataFrame): F[Unit]
+
+  /**
+   * Whether this lake format tolerates deletes to happen asynchronously instead of immediately
+   *
+   * If tolerated, then we use our customized `LakeLoaderFileSystem`.
+   */
+  def toleratesAsyncDelete: Boolean
+
+  /**
+   * Whether this writer expects the DataFrame to be sorted by the partition column, i.e. by
+   * event_name
+   */
+  def expectsSortedDataframe: Boolean
 }

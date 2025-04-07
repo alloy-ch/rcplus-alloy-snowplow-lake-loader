@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -24,6 +24,7 @@ import org.apache.spark.sql.types.StructType
 
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
+import java.time.Instant
 import scala.concurrent.duration.DurationLong
 
 import com.snowplowanalytics.iglu.client.resolver.registries.{Http4sRegistryLookup, RegistryLookup}
@@ -32,7 +33,7 @@ import com.snowplowanalytics.snowplow.badrows.{BadRow, Processor => BadRowProces
 import com.snowplowanalytics.snowplow.badrows.Payload.{RawPayload => BadRowRawPayload}
 import com.snowplowanalytics.snowplow.sources.{EventProcessingConfig, EventProcessor, TokenedEvents}
 import com.snowplowanalytics.snowplow.sinks.ListOfList
-import com.snowplowanalytics.snowplow.lakes.{Environment, Metrics, RuntimeService}
+import com.snowplowanalytics.snowplow.lakes.{Environment, RuntimeService}
 import com.snowplowanalytics.snowplow.runtime.processing.BatchUp
 import com.snowplowanalytics.snowplow.runtime.syntax.foldable._
 import com.snowplowanalytics.snowplow.loaders.transform.{
@@ -55,8 +56,8 @@ object Processing {
         // Needed for Kinesis, where we want to subscribe to the stream as early as possible, so that other workers don't steal our shard leases
         Stream.eval(env.lakeWriter.createTable *> deferredTableExists.complete(()))
 
-      implicit val lookup: RegistryLookup[F]           = Http4sRegistryLookup(env.httpClient)
-      val eventProcessingConfig: EventProcessingConfig = EventProcessingConfig(env.windowing)
+      implicit val lookup: RegistryLookup[F] = Http4sRegistryLookup(env.httpClient)
+      val eventProcessingConfig              = EventProcessingConfig(env.windowing, env.metrics.setLatency)
 
       env.source
         .stream(eventProcessingConfig, eventProcessor(env, deferredTableExists.get))
@@ -69,18 +70,15 @@ object Processing {
   private case class ParseResult(
     events: List[Event],
     bad: List[BadRow],
-    originalBytes: Long
+    originalBytes: Long,
+    earliestCollectorTstamp: Option[Instant]
   )
 
   private case class Batched(
     events: ListOfList[Event],
     entities: Map[TabledEntity, Set[SchemaSubVersion]],
-    originalBytes: Long
-  )
-
-  private case class Transformed(
-    events: List[Row],
-    schema: StructType
+    originalBytes: Long,
+    earliestCollectorTstamp: Option[Instant]
   )
 
   private def eventProcessor[F[_]: Async: RegistryLookup](
@@ -117,21 +115,19 @@ object Processing {
     badProcessor: BadRowProcessor,
     ref: Ref[F, WindowState]
   ): Pipe[F, TokenedEvents, Nothing] =
-    _.through(setLatency(env.metrics))
-      .through(rememberTokens(ref))
+    _.through(rememberTokens(ref))
       .through(incrementReceivedCount(env))
       .through(parseBytes(env, badProcessor))
       .through(handleParseFailures(env, badProcessor))
       .through(BatchUp.noTimeout(env.inMemBatchBytes))
       .through(transformBatch(env, badProcessor, ref))
-      .through(sinkTransformedBatch(env, ref))
 
   private def transformBatch[F[_]: RegistryLookup: Async](
     env: Environment[F],
     badProcessor: BadRowProcessor,
     ref: Ref[F, WindowState]
-  ): Pipe[F, Batched, Transformed] =
-    _.parEvalMapUnordered(env.cpuParallelism) { case Batched(events, entities, _) =>
+  ): Pipe[F, Batched, Nothing] =
+    _.parEvalMapUnordered(env.cpuParallelism) { case Batched(events, entities, _, earliestCollectorTstamp) =>
       for {
         _ <- Logger[F].debug(s"Processing batch of size ${events.size}")
         nonAtomicFields <- NonAtomicFields.resolveTypes[F](env.resolver, entities, env.schemasToSkip)
@@ -139,44 +135,32 @@ object Processing {
         _ <- rememberColumnNames(ref, nonAtomicFields.fields)
         (bad, rows) <- transformToSpark[F](badProcessor, events, nonAtomicFields)
         _ <- sendFailedEvents(env, badProcessor, bad)
-        _ <- ref.update(s => s.copy(numEvents = s.numEvents + rows.size))
-      } yield Transformed(rows, SparkSchema.forBatch(nonAtomicFields.fields, env.respectIgluNullability))
-    }
+        windowState <- ref.updateAndGet { s =>
+                         val updatedCollectorTstamp = chooseEarliestTstamp(earliestCollectorTstamp, s.earliestCollectorTstamp)
+                         s.copy(numEvents = s.numEvents + rows.size, earliestCollectorTstamp = updatedCollectorTstamp)
+                       }
+        _ <- sinkTransformedBatch(env, windowState, rows, SparkSchema.forBatch(nonAtomicFields.fields, env.respectIgluNullability))
+      } yield ()
+    }.drain
 
   private def sinkTransformedBatch[F[_]: Sync](
     env: Environment[F],
-    ref: Ref[F, WindowState]
-  ): Pipe[F, Transformed, Nothing] =
-    _.evalMap { case Transformed(rows, schema) =>
-      NonEmptyList.fromList(rows) match {
-        case Some(nel) =>
-          for {
-            windowState <- ref.get
-            _ <- env.lakeWriter.localAppendRows(windowState.viewName, nel, schema)
-            _ <- Logger[F].debug(s"Finished processing batch of size ${rows.size}")
-          } yield ()
-        case None =>
-          Logger[F].debug(s"An in-memory batch yielded zero good events.  Nothing will be saved to local disk.")
-      }
-
-    }.drain
-
-  private def setLatency[F[_]: Sync](metrics: Metrics[F]): Pipe[F, TokenedEvents, TokenedEvents] =
-    _.evalTap {
-      _.earliestSourceTstamp match {
-        case Some(t) =>
-          for {
-            now <- Sync[F].realTime
-            latency = now - t.toEpochMilli.millis
-            _ <- metrics.setLatency(latency)
-          } yield ()
-        case None =>
-          Applicative[F].unit
-      }
+    windowState: WindowState,
+    rows: List[Row],
+    schema: StructType
+  ): F[Unit] =
+    NonEmptyList.fromList(rows) match {
+      case Some(nel) =>
+        for {
+          _ <- env.lakeWriter.localAppendRows(windowState.viewName, nel, schema)
+          _ <- Logger[F].debug(s"Finished processing batch of size ${rows.size}")
+        } yield ()
+      case None =>
+        Logger[F].debug(s"An in-memory batch yielded zero good events.  Nothing will be saved to local disk.")
     }
 
   private def rememberTokens[F[_]: Functor](ref: Ref[F, WindowState]): Pipe[F, TokenedEvents, Chunk[ByteBuffer]] =
-    _.evalMap { case TokenedEvents(events, token, _) =>
+    _.evalMap { case TokenedEvents(events, token) =>
       ref.update(state => state.copy(tokens = token :: state.tokens)).as(events)
     }
 
@@ -207,17 +191,23 @@ object Processing {
                                  }
                                }
                              }
-      } yield ParseResult(events, badRows, numBytes)
+        earliestCollectorTstamp = events.view.map(_.collector_tstamp).minOption
+      } yield ParseResult(events, badRows, numBytes, earliestCollectorTstamp)
     }
 
   private implicit def batchable: BatchUp.Batchable[ParseResult, Batched] = new BatchUp.Batchable[ParseResult, Batched] {
     def combine(b: Batched, a: ParseResult): Batched = {
       val entities = Foldable[List].foldMap(a.events)(TabledEntity.forEvent(_))
-      Batched(b.events.prepend(a.events), entities |+| b.entities, a.originalBytes + b.originalBytes)
+      Batched(
+        b.events.prepend(a.events),
+        entities |+| b.entities,
+        a.originalBytes + b.originalBytes,
+        chooseEarliestTstamp(a.earliestCollectorTstamp, b.earliestCollectorTstamp)
+      )
     }
     def single(a: ParseResult): Batched = {
       val entities = Foldable[List].foldMap(a.events)(TabledEntity.forEvent(_))
-      Batched(ListOfList.of(List(a.events)), entities, a.originalBytes)
+      Batched(ListOfList.of(List(a.events)), entities, a.originalBytes, a.earliestCollectorTstamp)
     }
     def weightOf(a: ParseResult): Long = a.originalBytes
   }
@@ -273,6 +263,12 @@ object Processing {
           _ <- Logger[F].info(s"Window ${state.viewName} finished writing and committing ${state.numEvents} events to the lake.")
           _ <- env.metrics.addCommitted(state.numEvents)
           _ <- env.metrics.setProcessingLatency(now - state.startTime.toEpochMilli.millis)
+          _ <- state.earliestCollectorTstamp match {
+                 case Some(earliestCollectorTstamp) =>
+                   env.metrics.setE2ELatency(now - earliestCollectorTstamp.toEpochMilli.millis)
+                 case None =>
+                   Sync[F].unit
+               }
         } yield ()
       } else
         Logger[F].info(s"Window ${state.viewName} yielded zero good events.  Nothing will be written into the lake.")
@@ -289,4 +285,12 @@ object Processing {
         new RuntimeException(msg)
       )
     } else Applicative[F].unit
+
+  private def chooseEarliestTstamp(o1: Option[Instant], o2: Option[Instant]): Option[Instant] =
+    (o1, o2)
+      .mapN { case (t1, t2) =>
+        if (t1.isBefore(t2)) t1 else t2
+      }
+      .orElse(o1)
+      .orElse(o2)
 }

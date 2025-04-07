@@ -2,13 +2,15 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
 
 package com.snowplowanalytics.snowplow.lakes.tables
+
+import java.net.InetAddress
 
 import cats.implicits._
 import cats.effect.Sync
@@ -55,7 +57,16 @@ class DeltaWriter(config: Config.Delta) extends Writer {
         .build()
     }: Unit
 
+    // For Azure a wrong storage name means an invalid hostname and infinite retries when creating the Delta table
+    // If the hostname is invalid, UnknownHostException gets thrown
+    val checkHostname =
+      if (List("abfs", "abfss").contains(config.location.getScheme))
+        Sync[F].blocking(InetAddress.getByName(config.location.getHost()))
+      else
+        Sync[F].unit
+
     Logger[F].info(s"Creating Delta table ${config.location} if it does not already exist...") >>
+      checkHostname >>
       Sync[F]
         .blocking(builder.execute())
         .void
@@ -93,4 +104,12 @@ class DeltaWriter(config: Config.Delta) extends Writer {
         }
     }
 
+  /**
+   * Delta tolerates async deletes; in other words when we delete a file, there is no strong
+   * requirement that the file must be deleted immediately. Delta uses unique file names and never
+   * re-writes a file that was previously deleted
+   */
+  override def toleratesAsyncDelete: Boolean = true
+
+  override def expectsSortedDataframe: Boolean = false
 }

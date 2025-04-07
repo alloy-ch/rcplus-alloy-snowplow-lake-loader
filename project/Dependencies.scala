@@ -2,8 +2,8 @@
  * Copyright (c) 2014-present Snowplow Analytics Ltd. All rights reserved.
  *
  * This software is made available by Snowplow Analytics, Ltd.,
- * under the terms of the Snowplow Limited Use License Agreement, Version 1.0
- * located at https://docs.snowplow.io/limited-use-license-1.0
+ * under the terms of the Snowplow Limited Use License Agreement, Version 1.1
+ * located at https://docs.snowplow.io/limited-use-license-1.1
  * BY INSTALLING, DOWNLOADING, ACCESSING, USING OR DISTRIBUTING ANY PORTION
  * OF THE SOFTWARE, YOU AGREE TO THE TERMS OF SUCH LICENSE AGREEMENT.
  */
@@ -15,50 +15,53 @@ object Dependencies {
     object Spark {
 
       // A version of Spark which is compatible with the current version of Iceberg and Delta
-      val forIcebergDelta      = "3.5.1"
+      val forIcebergDelta      = "3.5.4"
       val forIcebergDeltaMinor = "3.5"
 
       // Hudi can use a different version of Spark because we bundle a separate Docker image
       // This version of Spark must be compatible with the current version of Hudi
-      val forHudi      = "3.5.1"
+      val forHudi      = "3.5.4"
       val forHudiMinor = "3.5"
     }
 
     // Scala
     val catsEffect       = "3.5.4"
     val decline          = "2.4.1"
-    val circe            = "0.14.3"
-    val http4s           = "0.23.16"
+    val circe            = "0.14.4"
+    val http4s           = "0.23.29"
     val betterMonadicFor = "0.3.1"
 
     // Spark
-    val delta          = "3.2.0"
-    val hudi           = "0.15.0"
-    val hudiAws        = "1.0.0-beta2"
-    val iceberg        = "1.5.2"
-    val hadoop         = "3.4.0"
-    val gcsConnector   = "hadoop3-2.2.25"
-    val biglakeIceberg = "0.1.0"
-    val hive           = "3.1.3"
+    val delta        = "3.2.1"
+    val hudi         = "0.15.0"
+    val hudiAws      = "1.0.0-beta2"
+    val iceberg      = "1.7.1"
+    val hadoop       = "3.4.1"
+    val gcsConnector = "hadoop3-2.2.25"
+    val hive         = "3.1.3"
 
     // java
     val slf4j       = "2.0.13"
-    val azureSdk    = "1.11.4"
-    val sentry      = "6.25.2"
-    val awsSdk1     = "1.12.646"
-    val awsSdk2     = "2.25.16" // Match common-streams
+    val azureSdk    = "1.12.2"
+    val sentry      = "7.16.0"
+    val awsSdk1     = "1.12.777"
+    val awsSdk2     = "2.29.0" // Match common-streams
     val awsRegistry = "1.1.20"
+    val jsonSmart   = "2.5.2"
 
     // Snowplow
-    val streams    = "0.8.0-M5"
-    val igluClient = "3.2.0"
+    val streams    = "0.10.0"
+    val igluClient = "4.0.0"
 
     // Transitive overrides
-    val protobuf  = "3.25.1"
+    val protobuf  = "3.25.5"
     val snappy    = "1.1.10.5"
-    val thrift    = "0.18.1"
-    val netty     = "4.1.109.Final"
-    val pubsubSdk = "1.132.3"
+    val thrift    = "0.21.0"
+    val netty     = "4.1.118.Final"
+    val pubsubSdk = "1.134.1"
+    val avro      = "1.11.4"
+    val jackson   = "2.17.2"
+    val kafka     = "3.9.0"
 
     // tests
     val specs2           = "4.20.0"
@@ -79,14 +82,15 @@ object Dependencies {
   }
 
   // spark and hadoop
-  val delta        = "io.delta"                   %% "delta-spark"                                            % V.delta
-  val hudi         = "org.apache.hudi"            %% s"hudi-spark${V.Spark.forHudiMinor}-bundle"              % V.hudi
-  val iceberg      = "org.apache.iceberg"         %% s"iceberg-spark-runtime-${V.Spark.forIcebergDeltaMinor}" % V.iceberg
-  val hadoopClient = "org.apache.hadoop"           % "hadoop-client-runtime"                                  % V.hadoop
-  val hadoopAzure  = "org.apache.hadoop"           % "hadoop-azure"                                           % V.hadoop
-  val hadoopAws    = "org.apache.hadoop"           % "hadoop-aws"                                             % V.hadoop
-  val gcsConnector = "com.google.cloud.bigdataoss" % "gcs-connector"                                          % V.gcsConnector
-  val hiveCommon   = "org.apache.hive"             % "hive-common"                                            % V.hive
+  val delta         = "io.delta"                   %% "delta-spark"                                            % V.delta
+  val deltaDynamodb = "io.delta"                    % "delta-storage-s3-dynamodb"                              % V.delta
+  val hudi          = "org.apache.hudi"            %% s"hudi-spark${V.Spark.forHudiMinor}-bundle"              % V.hudi
+  val iceberg       = "org.apache.iceberg"         %% s"iceberg-spark-runtime-${V.Spark.forIcebergDeltaMinor}" % V.iceberg
+  val hadoopClient  = "org.apache.hadoop"           % "hadoop-client-runtime"                                  % V.hadoop
+  val hadoopAzure   = "org.apache.hadoop"           % "hadoop-azure"                                           % V.hadoop
+  val hadoopAws     = "org.apache.hadoop"           % "hadoop-aws"                                             % V.hadoop
+  val gcsConnector  = "com.google.cloud.bigdataoss" % "gcs-connector"                                          % V.gcsConnector
+  val hiveCommon    = "org.apache.hive"             % "hive-common"                                            % V.hive
 
   val hudiAws = ("org.apache.hudi" % "hudi-aws" % V.hudiAws).excludeAll(ExclusionRule(organization = "org.apache.hudi"))
 
@@ -98,16 +102,22 @@ object Dependencies {
   val awsS3         = "software.amazon.awssdk" % "s3"                    % V.awsSdk2
   val awsS3Transfer = "software.amazon.awssdk" % "s3-transfer-manager"   % V.awsSdk2
   val awsSts        = "software.amazon.awssdk" % "sts"                   % V.awsSdk2
+  val dynamodbSdk1  = "com.amazonaws"          % "aws-java-sdk-dynamodb" % V.awsSdk1
   val awsRegistry   = "software.amazon.glue"   % "schema-registry-serde" % V.awsRegistry
+  val jsonSmart     = "net.minidev"            % "json-smart"            % V.jsonSmart
 
   // transitive overrides
-  val protobuf   = "com.google.protobuf" % "protobuf-java"                      % V.protobuf
-  val snappy     = "org.xerial.snappy"   % "snappy-java"                        % V.snappy
-  val hadoopYarn = "org.apache.hadoop"   % "hadoop-yarn-server-resourcemanager" % V.hadoop
-  val thrift     = "org.apache.thrift"   % "libthrift"                          % V.thrift
-  val netty      = "io.netty"            % "netty-all"                          % V.netty
-  val awsCore    = "com.amazonaws"       % "aws-java-sdk-core"                  % V.awsSdk1
-  val pubsubSdk  = "com.google.cloud"    % "google-cloud-pubsub"                % V.pubsubSdk
+  val protobuf     = "com.google.protobuf"            % "protobuf-java"                      % V.protobuf
+  val snappy       = "org.xerial.snappy"              % "snappy-java"                        % V.snappy
+  val hadoopYarn   = "org.apache.hadoop"              % "hadoop-yarn-server-resourcemanager" % V.hadoop
+  val thrift       = "org.apache.thrift"              % "libthrift"                          % V.thrift
+  val netty        = "io.netty"                       % "netty-all"                          % V.netty
+  val awsCore      = "com.amazonaws"                  % "aws-java-sdk-core"                  % V.awsSdk1
+  val pubsubSdk    = "com.google.cloud"               % "google-cloud-pubsub"                % V.pubsubSdk
+  val avro         = "org.apache.avro"                % "avro"                               % V.avro
+  val jacksonDT    = "com.fasterxml.jackson.datatype" % "jackson-datatype-jsr310"            % V.jackson
+  val jacksonMS    = "com.fasterxml.jackson.module"  %% "jackson-module-scala"               % V.jackson
+  val kafkaClients = "org.apache.kafka"               % "kafka-clients"                      % V.kafka
 
   // snowplow
   val streamsCore      = "com.snowplowanalytics" %% "streams-core"             % V.streams
@@ -127,14 +137,15 @@ object Dependencies {
     slf4j    % Runtime,
     protobuf % Runtime,
     netty    % Runtime,
-    snappy   % Runtime
+    snappy   % Runtime,
+    avro     % Runtime
   )
 
   val icebergDeltaRuntimeDependencies = Seq(
     iceberg,
-    delta                     % Runtime,
-    Spark.coreForIcebergDelta % Runtime,
-    Spark.sqlForIcebergDelta  % Runtime
+    delta,
+    Spark.coreForIcebergDelta,
+    Spark.sqlForIcebergDelta
   )
 
   val coreDependencies = Seq(
@@ -145,6 +156,8 @@ object Dependencies {
     Spark.coreForIcebergDelta % Provided,
     Spark.sqlForIcebergDelta  % Provided,
     iceberg                   % Provided,
+    jacksonDT,
+    jacksonMS,
     igluClientHttp4s,
     decline,
     sentry,
@@ -162,15 +175,20 @@ object Dependencies {
     awsCore, // Dependency on aws sdk v1 will likely be removed in the next release of hadoop-aws
     awsS3,
     awsGlue,
-    awsS3Transfer % Runtime,
-    awsSts
+    awsSts,
+    dynamodbSdk1,
+    deltaDynamodb % Runtime,
+    awsS3Transfer % Runtime
   ) ++ commonRuntimeDependencies
 
   val azureDependencies = Seq(
     kafka,
     azureIdentity,
     hadoopAzure,
-    hadoopClient
+    hadoopClient,
+    jsonSmart,
+    kafkaClients % Runtime,
+    specs2
   ) ++ commonRuntimeDependencies
 
   val gcpDependencies = Seq(
