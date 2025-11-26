@@ -2,6 +2,10 @@
 
 The Snowplow lake loader reads the stream of enriched events from a Kinesis Data Stream and writes them to S3.
 
+> [!IMPORTANT]
+> This repository is based on the code licensed before the [`Snowplow Limited Use License Agreement, Version 1.1`](https://docs.snowplow.io/limited-use-license-1.1/) was introduced
+> on November 8, 2024.
+
 Forked and adapted from the [original Snowplow lake loader](https://github.com/snowplow-incubator/snowplow-lake-loader).
 
 Current version: **v0.1.3**
