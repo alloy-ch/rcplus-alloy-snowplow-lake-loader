@@ -62,7 +62,8 @@ class IcebergWriter(config: Config.Iceberg) extends Writer {
       df.write
         .format("iceberg")
         .mode("append")
-        .options(config.icebergWriteOptions)
+        .option("merge-schema", true)
+        .option("check-ordering", false)
         .saveAsTable(fqTable)
     }
 
