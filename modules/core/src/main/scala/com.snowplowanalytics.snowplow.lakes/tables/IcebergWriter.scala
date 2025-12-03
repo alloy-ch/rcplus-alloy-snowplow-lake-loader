@@ -64,6 +64,7 @@ class IcebergWriter(config: Config.Iceberg) extends Writer {
         .mode("append")
         .option("merge-schema", true)
         .option("check-ordering", false)
+        .option("distribution-mode", "none")
         .saveAsTable(fqTable)
     }
 

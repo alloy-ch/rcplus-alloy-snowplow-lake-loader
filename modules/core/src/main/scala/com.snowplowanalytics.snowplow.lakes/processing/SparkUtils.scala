@@ -18,7 +18,7 @@ import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.apache.spark.sql.functions.current_timestamp
+import org.apache.spark.sql.functions.{col, current_timestamp}
 import org.apache.spark.sql.types.StructType
 
 import com.snowplowanalytics.snowplow.lakes.Config
@@ -97,13 +97,13 @@ private[processing] object SparkUtils {
     viewName: String,
     writerParallelism: Int
   ): F[DataFrame] =
-    Sync[F].blocking {
-      spark
-        .table(viewName)
-        .withColumn("load_tstamp", current_timestamp())
-        .coalesce(writerParallelism)
-        .localCheckpoint()
-    }
+    for {
+      df <- Sync[F].pure(spark.table(viewName))
+      df <- Sync[F].pure {
+              if (writerParallelism > 1) df.repartitionByRange(writerParallelism, col("event_name"), col("event_id")) else df.coalesce(1)
+            }
+      df <- Sync[F].pure(df.sortWithinPartitions("event_name"))
+    } yield df.withColumn("load_tstamp", current_timestamp())
 
   def dropView[F[_]: Sync](spark: SparkSession, viewName: String): F[Unit] =
     Logger[F].info(s"Removing Spark data frame $viewName from local disk...") >>

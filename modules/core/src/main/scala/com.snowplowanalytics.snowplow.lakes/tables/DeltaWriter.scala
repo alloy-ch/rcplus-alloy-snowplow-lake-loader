@@ -110,5 +110,4 @@ class DeltaWriter(config: Config.Delta) extends Writer {
    * re-writes a file that was previously deleted
    */
   override def toleratesAsyncDelete: Boolean = true
-
 }
