@@ -1,17 +1,18 @@
 # rcplus-alloy-snowplow-lake-loader
 
-The Snowplow lake loader reads the stream of enriched events from a Kinesis Data Stream and writes them to S3.
+Current version: **v0.2.4**
 
-> [!IMPORTANT]
-> This repository is based on the code licensed before the [`Snowplow Limited Use License Agreement, Version 1.1`](https://docs.snowplow.io/limited-use-license-1.1/) was introduced
-> on November 8, 2024.
+The Snowplow lake loader reads the stream of enriched events from a Kinesis Data Stream and writes them to S3.
 
 Forked and adapted from the [original Snowplow lake loader](https://github.com/snowplow-incubator/snowplow-lake-loader).
 
-Current version: **v0.2.4**
+> [!NOTE] This README.md is placed in the `.github` folder to avoid the duplication of the same content in the main README.md.
+> The `/.github/README.md` generally has higher priority than `/README.md` to be displayed as the default page at [GitHub](https://github.com).
 
-_**NOTE**_: this README.md is placed in the `.github` folder to avoid the duplication of the same content in the main README.md.
-`/.github/README.md` generally has higher priority than `/README.md` to be displayed as the default page at github.com.
+> [!IMPORTANT]
+> This repository is based on the code licensed before the [`Snowplow Limited Use License Agreement, Version 1.1`](https://docs.snowplow.io/limited-use-license-1.1/) 
+> was introduced on November 8, 2024. The instructions below for Development are deprecated for now and kept for the references.
+> The CI/CD instructions are still relevant.
 
 ## Development, testing, and release management
 
@@ -46,18 +47,22 @@ Regularly check the upstream repo at https://github.com/snowplow-incubator/snowp
 if there is any new release or update, review the changes and decide if this repo should be updated.
 
 In the case of yes,
-1. create a branch of this repo from `origin/main`
-2. merge the upstream changes into the branch
-3. if the changes alter the build environment,
+1. Create a branch of this repo from `origin/main`
+2. Merge the upstream changes into the branch
+3. If the changes alter the build environment,
    update `Dockerfile.alloy-dev` to align the Scala version with `./project/BuildSettings` and the sbt version with `./project/build.properties` 
-4. test the changes
-5. if everything is fine, create a PR to merge the changes into `main`
-6. bump the version of main using `bumpsemver`
-7. push all the changes and the new tag to the origin
+4. Test the changes
+5. If everything is fine, create a PR to merge the changes into `main`
+6. Bump the version of main using `bumpsemver`
+7. Push all the changes and the new tag to the origin
+8. As soon as the proper version tag is pushed the GitHub actions build and push new Docker image into dockerHub. See below.
 
-## NOTE
+## CI/CD
 
 This repo has a redacted GitHub Actions workflow for CI.
 
 It tests all the PRs, build and push a Docker image (to DockerHub as a public image) if the git commit is tagged.
 In case the tag starts with `v`, it tags the image additionally as `latest`.
+
+For Docker publish see this file `.github/workflows/ci.yml`.
+The Docker image will be published here [alloych/lake-loader](https://hub.docker.com/r/alloych/lake-loader/tags)
