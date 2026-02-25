@@ -6,7 +6,8 @@ The Snowplow lake loader reads the stream of enriched events from a Kinesis Data
 
 Forked and adapted from the [original Snowplow lake loader](https://github.com/snowplow-incubator/snowplow-lake-loader).
 
-> [!NOTE] This README.md is placed in the `.github` folder to avoid the duplication of the same content in the main README.md.
+> [!NOTE] 
+> This README.md is placed in the `.github` folder to avoid the duplication of the same content in the main README.md.
 > The `/.github/README.md` generally has higher priority than `/README.md` to be displayed as the default page at [GitHub](https://github.com).
 
 > [!IMPORTANT]
