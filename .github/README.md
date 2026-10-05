@@ -1,6 +1,6 @@
 # rcplus-alloy-snowplow-lake-loader
 
-Current version: **v0.2.4**
+Current version: **v0.2.5**
 
 The Snowplow lake loader reads the stream of enriched events from a Kinesis Data Stream and writes them to S3.
 
